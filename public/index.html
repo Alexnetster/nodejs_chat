@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>CHAT EXAMPLE</title>
+    <script src="/javascripts/jquery.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel='stylesheet' href="/stylesheets/style.css" />
+  </head>
+  <body>
+    
+    <div>CHAT EXAMPLE</div>
+    <div id="chat">
+	    <div id="user_list">
+		    
+	    </div>
+	    
+	    <div id="messages">
+			
+	    </div>
+	    
+	    <div id="input">
+			<input type='text' />
+	    </div>
+    </div>
+
+    <script>
+    	//사용자 이름을 정하는 부분입니다. 랜덤하게 숫자를 붙여 주었습니다. (겹치는 이름이 발생할 수도 있지만, 이는 일단 고려하지 않았습니다.)
+    	var username = "testuser" + Math.ceil(Math.random() * 100);
+    	
+    	var socket = null;
+    	
+    	//jQuery를 이용하여 페이지가 완전히 로딩되었을 때 모든 작업을 처리하도록 합니다.
+		$(document).ready(function () {
+			//socket.io를 이용하여 서버와 웹소켓으로 연결합니다.
+			//socket = io.connect();
+			socket = io.connect('http://localhost:3000');
+			
+			//누군가 접속했을 때의 상황을 처리합니다.
+			socket.on("someone_joined", function (data) {
+	 			data = JSON.parse(data);
+	 			$("#user_list").empty(); //"user_list"라는 id를 가진 div의 내용을 비웁니다.
+	 			
+	 			for(var i=0; i<data.length; i++){
+	 				var username = data[i];
+	 				$("#user_list").append('<div class="user">' + username + '</div>'); //"user_list"라는 id를 가진 div에 유저 이름들을 채웁니다.
+	 			}
+	 			
+	 			$("#messages").append("<div class='alarm'>" + username + " joined this workspace!</div>");
+	 		});
+	 		
+	 		//누군가 접속을 종료했을 때의 상황을 처리합니다.
+	 		socket.on("someone_leaved", function (data) {
+	 			$("#messages").append("<div class='alarm'>" + data + " leaved this workspace!</div>");
+	 		});
+	 		
+	 		//메시지를 주고 받을 때의 상황을 처리합니다.
+	 		socket.on("communication_message", function (data) {
+	 			data = decodeURIComponent(data);
+				
+				//&, ", ', <, > 기호와 같은 특수 문자를 처리합니다.
+				data = ((data.replace(/&/g, '&amp;')).replace(/\"/g, '&quot;')).replace(/\'/g, '&#39;'); 
+				data = data.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+				
+	 			$("#messages").append("<div class='message'>" + data + "</div>"); //"messages"라는 id를 가진 div에 메시지를 추가합니다.
+	 			$("#messages").scrollTop($("#messages").height()); //채팅 메시지가 스크롤해야 보이는 영역으로 넘어갈 경우를 대비하여 새 메시지가 오면 무조건 스크롤 바를 최대한 내리도록 처리합니다.
+	 		});
+			
+			//접속자 목록을 새로 고칩니다.
+			socket.on("refresh_userlist", function (data) {
+	 			data = JSON.parse(data);
+	 			$("#user_list").empty();
+	 			
+	 			for(var i=0; i<data.length; i++){
+	 				var username = data[i];
+	 				
+	 				$("#user_list").append('<div class="user">' + username + '</div>');
+	 			}
+	 		});
+	 		
+	 		//입력창에서 엔터키를 누르면 메시지가 전송되도록 하는 소스 코드입니다.
+	 		$("#input input").keypress(function(evt){
+				if((evt.keyCode || evt.which) == 13){
+					evt.preventDefault();
+					
+					var encodedMsg = encodeURIComponent($(this).val());
+			
+					//채팅 메시지를 전송합니다.
+					socket.emit("message", '{"channel": "chat", "action":"send_message", "username":"' + username + '", "message":"' + encodedMsg + '"}');
+					$(this).val("");
+				}
+			});
+			
+			//웹브라우저를 종료하거나 새로 고침할 때는 채팅방을 나가도록 처리합니다.
+			$(window).unload(function() {
+				socket.emit("leave", '{"channel": "workspace", "action":"leave", "username":"' + username + '", "message":"see you"}');
+	 		});
+			
+			//페이지에 접속하면 서버에 접속 메시지를 보냅니다.
+			socket.emit("join", '{"channel": "workspace", "action":"join", "username":"' + username + '", "message":"hello"}');
+		});
+    </script>
+
+  </body>
+</html>
